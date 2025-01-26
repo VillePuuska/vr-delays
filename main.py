@@ -1,33 +1,55 @@
-from utils.fetch import fetch_train_for_date
+from utils.fetch import fetch_train_for_dates
+from typing import Any
 import datetime
+import polars as pl
 import asyncio
 
 
 async def main() -> None:
-    response = await fetch_train_for_date(
-        train=40, date=datetime.date(year=2025, month=1, day=24)
+    train_list = await fetch_train_for_dates(
+        train=40,
+        dates=[
+            datetime.date.today() - datetime.timedelta(days=diff) for diff in range(180)
+        ],
+        max_concurrent=5,
+        sleep_after_sec=1.0,
     )
 
-    if len(response.root) == 0:
-        print("No data for the day. Is the train scheduled for said day?")
-        return
-    assert len(response.root) == 1, "a train-line is assumed to only run once per day"
+    rows = []
+    for train in train_list.root:
+        row: dict[str, Any] = {}
+        row["train_number"] = train.train_number
+        row["departure_date"] = train.departure_date
+        row["cancelled"] = train.cancelled
+        row["train_type"] = train.train_type
 
-    time_table_rows = response.root[0].time_table_rows
-    tpe_departure = [
-        row
-        for row in time_table_rows.root
-        if row.station_short_code == "TPE" and row.type == "DEPARTURE"
-    ][0]
-    psl_arrival = [
-        row
-        for row in time_table_rows.root
-        if row.station_short_code == "PSL" and row.type == "ARRIVAL"
-    ][0]
+        tpe_dep_rows = [
+            row
+            for row in train.time_table_rows.root
+            if row.station_short_code == "TPE" and row.type == "DEPARTURE"
+        ]
+        assert len(tpe_dep_rows) == 1
+        tpe_dep_row = tpe_dep_rows[0]
+        row["departure_scheduled_time"] = tpe_dep_row.scheduled_time
+        row["departure_actual_time"] = tpe_dep_row.actual_time
+        row["departure_difference_in_minutes"] = tpe_dep_row.difference_in_minutes
 
-    print(f"{response.root[0].train_type} {response.root[0].train_number}")
-    print(tpe_departure)
-    print(psl_arrival)
+        psl_arr_rows = [
+            row
+            for row in train.time_table_rows.root
+            if row.station_short_code == "PSL" and row.type == "ARRIVAL"
+        ]
+        assert len(psl_arr_rows) == 1
+        psl_arr_row = psl_arr_rows[0]
+        row["arrival_scheduled_time"] = psl_arr_row.scheduled_time
+        row["arrival_actual_time"] = psl_arr_row.actual_time
+        row["arrival_difference_in_minutes"] = psl_arr_row.difference_in_minutes
+
+        rows.append(row)
+
+    df = pl.DataFrame(data=rows)
+    print(df)
+    print(df.describe())
 
 
 if __name__ == "__main__":
