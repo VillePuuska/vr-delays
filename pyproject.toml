@@ -12,3 +12,9 @@ dependencies = [
     "polars>=1.21.0",
     "pydantic>=2.10.6",
 ]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14.1",
+    "ruff>=0.9.3",
+]

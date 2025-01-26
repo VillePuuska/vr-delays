@@ -5,7 +5,7 @@ import json
 import asyncio
 
 
-async def main():
+async def main() -> None:
     response_json = await fetch_train_for_date(
         train=40, date=datetime.date(year=2025, month=1, day=24)
     )
